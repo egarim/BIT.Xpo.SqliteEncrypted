@@ -1,4 +1,5 @@
 ﻿using DevExpress.Xpo.DB;
+using DevExpress.Xpo.DB.Helpers;
 using Microsoft.Data.Sqlite;
 //using Microsoft.Data.Sqlite;
 using System;
@@ -6,7 +7,7 @@ using System.Data;
 
 namespace BIT.Xpo.SqliteEncrypted
 {
-    public class BitSQLiteConnectionProvider : SQLiteConnectionProvider
+    public class EncriptedSQLiteConnectionProvider : SQLiteConnectionProvider
     {
 
         public new static void Register()
@@ -17,28 +18,37 @@ namespace BIT.Xpo.SqliteEncrypted
 
         }
 
-        public new const string XpoProviderTypeString = nameof(BitSQLiteConnectionProvider);
+        public new const string XpoProviderTypeString = nameof(EncriptedSQLiteConnectionProvider);
         string EncryptionKey = string.Empty;
-        public BitSQLiteConnectionProvider(IDbConnection connection, AutoCreateOption autoCreateOption, string EncryptionKey) : base(connection, autoCreateOption)
+        public EncriptedSQLiteConnectionProvider(IDbConnection connection, AutoCreateOption autoCreateOption, string EncryptionKey) : base(connection, autoCreateOption)
         {
             this.EncryptionKey = EncryptionKey;
         }
         public static IDataStore CreateProviderFromString(string connectionString, AutoCreateOption autoCreateOption, string EncryptionKey, out IDisposable[] objectsToDisposeOnDisconnect)
         {
-            //TODO edit connection string with connection string helper ASK JAVIER
-            IDbConnection connection = new SqliteConnection("Data Source=mydb.db");
+            
+            ConnectionStringParser parser = new ConnectionStringParser(connectionString);
+            parser.RemovePartByName("XpoProvider");
+            string connectionString1 = parser.GetConnectionString();
+            IDbConnection connection = new SqliteConnection(connectionString1);
             objectsToDisposeOnDisconnect = new IDisposable[] { connection };
-            return new BitSQLiteConnectionProvider(connection, autoCreateOption, EncryptionKey);
+            return new EncriptedSQLiteConnectionProvider(connection, autoCreateOption, EncryptionKey);
         }
         public static IDataStore CreateProviderFromConnection(IDbConnection connection, AutoCreateOption autoCreateOption, string EncryptionKey)
         {
 
-            return new BitSQLiteConnectionProvider(connection, autoCreateOption, EncryptionKey);
+            return new EncriptedSQLiteConnectionProvider(AddPragmaKey(connection, EncryptionKey), autoCreateOption, EncryptionKey);
 
         }
         protected override IDbConnection CreateConnection()
         {
             var connection = base.CreateConnection();
+            AddPragmaKey(connection,EncryptionKey);
+            return connection;
+        }
+
+        static private IDbConnection AddPragmaKey(IDbConnection connection, string EncryptionKey)
+        {
             connection.Open();
 
             var command = connection.CreateCommand();
@@ -49,17 +59,7 @@ namespace BIT.Xpo.SqliteEncrypted
             command.CommandText = "PRAGMA key = " + quotedPassword;
             command.Parameters.Clear();
             command.ExecuteNonQuery();
-
-            //var connection = base.CreateConnection();
-
-            //connection.ConnectionString =
-            //new SqliteConnectionStringBuilder(connection.ConnectionString)
-            //{ Password = EncryptionKey }
-            //    .ToString();
-
             return connection;
         }
-
-
     }
 }
