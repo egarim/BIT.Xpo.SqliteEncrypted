@@ -32,7 +32,7 @@ namespace BIT.Xpo.SqliteEncrypted
             string connectionString1 = parser.GetConnectionString();
             IDbConnection connection = new SqliteConnection(connectionString1);
             objectsToDisposeOnDisconnect = new IDisposable[] { connection };
-            return new EncriptedSQLiteConnectionProvider(connection, autoCreateOption, EncryptionKey);
+            return EncriptedSQLiteConnectionProvider.CreateProviderFromConnection(connection, autoCreateOption, EncryptionKey);
         }
         public static IDataStore CreateProviderFromConnection(IDbConnection connection, AutoCreateOption autoCreateOption, string EncryptionKey)
         {

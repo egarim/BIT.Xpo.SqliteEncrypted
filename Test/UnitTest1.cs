@@ -1,5 +1,6 @@
 using BIT.Xpo.SqliteEncrypted;
 using DevExpress.Xpo;
+using DevExpress.Xpo.DB;
 using Microsoft.Data.Sqlite;
 using NUnit.Framework;
 using System.IO;
@@ -14,33 +15,25 @@ namespace Test
         }
 
         [Test]
-        public void Test1()
+        //Scenario Result Expected
+        public void CreateDataStoreFromIDbConnection_DataIsConsistent_Pass()
         {
             SQLitePCL.Batteries_V2.Init();
             EncriptedSQLiteConnectionProvider.Register();
 
 
-            if(File.Exists("mydb.db"))
+            if(File.Exists("CreateDataStoreFromIDbConnection.db"))
             {
-                File.Delete("mydb.db");
+                File.Delete("CreateDataStoreFromIDbConnection.db");
             }
 
-            var connection =new SqliteConnection("Data Source=mydb.db");
-            connection.Open();
-
-            var command = connection.CreateCommand();
-            command.CommandText = "SELECT quote($password);";
-            command.AddParameter("$password", "abc123");
-            var quotedPassword = (string)command.ExecuteScalar();
-
-            command.CommandText = "PRAGMA key = " + quotedPassword;
-            command.Parameters.Clear();
-            command.ExecuteNonQuery();
+            var connection =new SqliteConnection("Data Source=CreateDataStoreFromIDbConnection.db");
+          
 
 
 
             System.IDisposable[] _discard;
-            //var DataStore = BitSQLiteConnectionProvider.CreateProviderFromString(@"XpoProvider=BitSQLiteConnectionProvider;Data Source=mydb.db", DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, "abc123", out _discard);
+          
             var DataStore = EncriptedSQLiteConnectionProvider.CreateProviderFromConnection(connection, DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, "abc123");
             IDataLayer dl = new SimpleDataLayer(DataStore);
             using (Session session = new Session(dl))
@@ -73,21 +66,22 @@ namespace Test
             Assert.AreEqual(CustomerFromDatabase.Inactive, Customer.Inactive);
         }
         [Test]
-        public void Test2()
+        //Scenario Result Expected
+        public void CreateDataStoreFromConnectionString_DataIsConsistent_Pass()
         {
             SQLitePCL.Batteries_V2.Init();
             EncriptedSQLiteConnectionProvider.Register();
 
 
-            if (File.Exists("mydb.db"))
+            if (File.Exists("CreateDataStoreFromConnectionString.db"))
             {
-                File.Delete("mydb.db");
+                File.Delete("CreateDataStoreFromConnectionString.db");
             }
 
 
 
             System.IDisposable[] _discard;
-            var DataStore = EncriptedSQLiteConnectionProvider.CreateProviderFromString(@"XpoProvider=BitSQLiteConnectionProvider;Data Source=mydb.db", DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, "abc123", out _discard);
+            var DataStore = EncriptedSQLiteConnectionProvider.CreateProviderFromString(@"XpoProvider=EncriptedSQLiteConnectionProvider;Data Source=CreateDataStoreFromConnectionString.db", DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, "abc123", out _discard);
         
             IDataLayer dl = new SimpleDataLayer(DataStore);
             using (Session session = new Session(dl))
@@ -118,6 +112,64 @@ namespace Test
             Assert.AreEqual(CustomerFromDatabase.Name, Customer.Name);
             Assert.AreEqual(CustomerFromDatabase.Address, Customer.Address);
             Assert.AreEqual(CustomerFromDatabase.Inactive, Customer.Inactive);
+        }
+        [Test]
+        //Scenario Result Expected
+        public void CreateDataWithEncryptedConnectionReadDataWithNormalConnection_FileCantBeReaded_Fail()
+        {
+            SQLitePCL.Batteries_V2.Init();
+            EncriptedSQLiteConnectionProvider.Register();
+
+
+            if (File.Exists("CreateDataWithEncryptedConnectionReadDataWithNormalConnection.db"))
+            {
+                File.Delete("CreateDataWithEncryptedConnectionReadDataWithNormalConnection.db");
+            }
+
+
+
+            System.IDisposable[] _discard;
+            var CipherDataStore = EncriptedSQLiteConnectionProvider.CreateProviderFromString(@"XpoProvider=EncriptedSQLiteConnectionProvider;Data Source=CreateDataWithEncryptedConnectionReadDataWithNormalConnection.db", DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, "abc123", out _discard);
+
+            IDataLayer dl = new SimpleDataLayer(CipherDataStore);
+            using (Session session = new Session(dl))
+            {
+                System.Reflection.Assembly[] assemblies = new System.Reflection.Assembly[] {
+                       typeof(Customer).Assembly,
+
+                   };
+                session.UpdateSchema(assemblies);
+                session.CreateObjectTypeRecords(assemblies);
+            }
+
+            UnitOfWork UoW = new UnitOfWork(dl);
+
+            Customer Customer = new Customer(UoW);
+            Customer.Name = "Jose Manuel Ojeda Melgar";
+            Customer.Address = "Saint Petersburg Russia";
+            Customer.Inactive = false;
+            Customer.CreatedOn = new System.DateTime(2020, 5, 16);
+
+            UoW.CommitChanges();
+
+
+            var NormalDataStore = SQLiteConnectionProvider.CreateProviderFromString(@"Data Source=CreateDataWithEncryptedConnectionReadDataWithNormalConnection.db", DevExpress.Xpo.DB.AutoCreateOption.DatabaseAndSchema, out _discard);
+
+
+
+            UnitOfWork unitOfWork = new UnitOfWork(new SimpleDataLayer(NormalDataStore));
+            var Criteria = new DevExpress.Data.Filtering.BinaryOperator("Name", "Jose Manuel Ojeda Melgar");
+
+            Assert.Throws<DevExpress.Xpo.DB.Exceptions.SqlExecutionErrorException>(() =>
+            {
+                var CustomerFromDatabase = unitOfWork.FindObject<Customer>(Criteria);
+
+                Assert.AreEqual(CustomerFromDatabase.Name, Customer.Name);
+                Assert.AreEqual(CustomerFromDatabase.Address, Customer.Address);
+                Assert.AreEqual(CustomerFromDatabase.Inactive, Customer.Inactive);
+            });
+
+
         }
     }
 }
